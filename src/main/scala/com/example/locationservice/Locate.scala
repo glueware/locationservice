@@ -6,7 +6,7 @@ package com.example.locationservice
 import scala.concurrent._
 import com.glueware.glue._
 
-case class Location(latitude: Float, longitude: Float)
+case class Location(latitude: Double, longitude: Double)
 
 case class Locate(googleLocate: FutureFunction1[Address, GoogleLocation])
     extends FutureFunction1[Address, Location] {

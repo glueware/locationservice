@@ -3,4 +3,4 @@ package com.example.locationservice
 /**
  * @author J�rg
  */
-case class Address (value: String)
+case class Address(address: String)

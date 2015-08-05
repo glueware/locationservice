@@ -15,7 +15,9 @@ import spray.routing.Directives
 import spray.routing.Route
 import spray.routing.directives.OnCompleteFutureMagnet.apply
 
-// Provides implicit conversions for various context
+/*
+ * Provides implicit conversions for various context
+ */
 object ServiceComponent {
   implicit def serviceComponent[T, R](
     function: FutureFunction1[T, R])(
@@ -24,7 +26,9 @@ object ServiceComponent {
       jsonR: RootJsonFormat[R]) = new ServiceComponent[T, R](function)
 }
 
-// This class defines our service behavior for a function with the service actor as parameter
+/*
+ * This class defines our service behavior for a function 
+ */
 class ServiceComponent[T, R](function: FutureFunction1[T, R])(
   implicit val executionContext: ExecutionContext,
   jsonT: RootJsonFormat[T], // used by SprayJsonSupport
@@ -32,23 +36,37 @@ class ServiceComponent[T, R](function: FutureFunction1[T, R])(
     extends Directives
     with SprayJsonSupport {
 
-  val name: String = this.getClass.getName()
+  /**
+   * The name of a service component
+   */
+  val name: String = function.getClass.getName()
 
-  // Produces the future required by onComplete
+  /*
+   * Produces the future required by onComplete
+   */
   def apply(input: T): Future[R] =
     function.apply(Future(input))
 
   // By convention we generate the path from the name
-  val path = name.replaceAll(".", "/").replaceAll("$", "/")
+  val items = name.split(Array('$', '.')).toList
+
+  // We have to combine the items of name to a new "path" directive
+  val _path = items match {
+    case (head1 :: head2 :: tail) => path(((head1 / head2) /: tail)((x, y) => x / y))
+    case (head1 :: Nil)           => path(head1)
+    case Nil                      => noop
+  }
 
   val route: Route =
-    path(path) {
-      post {
-        entity(as[T]) { input =>
-          produce(instanceOf[R]) { output =>
-            onComplete(apply(input)) {
-              case Success(value)     => complete(OK, value.asInstanceOf[R])
-              case Failure(exepction) => complete(InternalServerError, s"An error occurred: ${exepction.getMessage}")
+    logRequest("request") {
+      _path {
+        post {
+          entity(as[T]) { input =>
+            produce(instanceOf[R]) { output =>
+              onComplete(apply(input)) {
+                case Success(value)     => complete(OK, value.asInstanceOf[R])
+                case Failure(exepction) => complete(InternalServerError, s"An error occurred: ${exepction.getMessage}")
+              }
             }
           }
         }
