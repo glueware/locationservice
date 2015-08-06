@@ -5,16 +5,27 @@ package com.example.locationservice
  */
 import scala.concurrent._
 import com.glueware.glue._
+import spray.json.DefaultJsonProtocol
 
-case class Location(latitude: Double, longitude: Double)
+case class ServiceLocation(latitude: Double, lat: Double)
 
-case class Locate(googleLocate: FutureFunction1[Address, GoogleLocation])
-    extends FutureFunction1[Address, Location] {
+/**
+ * see package object
+ */
+trait LocateJsonProtocol extends DefaultJsonProtocol {
+  implicit def serviceLocationJson = jsonFormat2(ServiceLocation)
+  implicit def addressJson = jsonFormat1(Address)
+}
+
+case class Locate(googleLocate: FutureFunction1[Address, GoogleApiResult[Location]])
+    extends FutureFunction1[Address, ServiceLocation] {
 
   // Members declared in scala.Function1 
-  def apply(address: Future[Address])(implicit executionContext: ExecutionContext): Future[Location] = {
-    def googleResultToLocation(googleResult: GoogleLocation): Location = {
-      Location(googleResult.latitude, googleResult.longitude)
+  def _apply(address: Future[Address])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[ServiceLocation] = {
+    def googleResultToLocation(googleResult: GoogleApiResult[Location]): ServiceLocation = {
+
+      // TODO handle cases for results
+      ServiceLocation(googleResult.results.head.lat, googleResult.results.head.lng)
     }
     googleLocate(address).map(googleResultToLocation)
   }

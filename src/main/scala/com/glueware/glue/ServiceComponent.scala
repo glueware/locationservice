@@ -21,7 +21,8 @@ import spray.routing.directives.OnCompleteFutureMagnet.apply
 object ServiceComponent {
   implicit def serviceComponent[T, R](
     function: FutureFunction1[T, R])(
-      implicit executionContext: ExecutionContext,
+      implicit refFactory: akka.actor.ActorRefFactory,
+      executionContext: ExecutionContext,
       jsonT: RootJsonFormat[T],
       jsonR: RootJsonFormat[R]) = new ServiceComponent[T, R](function)
 }
@@ -31,6 +32,7 @@ object ServiceComponent {
  */
 class ServiceComponent[T, R](function: FutureFunction1[T, R])(
   implicit val executionContext: ExecutionContext,
+  implicit val refFactory: akka.actor.ActorRefFactory,
   jsonT: RootJsonFormat[T], // used by SprayJsonSupport
   jsonR: RootJsonFormat[R])
     extends Directives

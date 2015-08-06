@@ -10,7 +10,7 @@ import akka.io.IO
 import spray.can.Http
 import spray.routing.Route
 
-case class Server(systemName: String, serviceFactory: ServiceComponents) {
+case class Server(systemName: String, serviceFactory: Service) {
   server =>
   //  Construct the ActorSystem we will use in our application
   implicit private lazy val system: ActorSystem = ActorSystem(systemName)
