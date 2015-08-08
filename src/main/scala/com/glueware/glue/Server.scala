@@ -41,4 +41,6 @@ case class Server(systemName: String, serviceFactory: Service) {
     listener = listener,
     interface = interface,
     port = port)
+
+  // http://stackoverflow.com/questions/24731242/spray-can-webservice-graceful-shutdown
 }

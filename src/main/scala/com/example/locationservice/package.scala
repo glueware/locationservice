@@ -8,6 +8,7 @@ import spray.json.DefaultJsonProtocol
 
 package object locationservice
     extends DefaultJsonProtocol
+    with AddressJsonProtocol
     with LocateJsonProtocol
     with GoogleJsonProtocol {
 }

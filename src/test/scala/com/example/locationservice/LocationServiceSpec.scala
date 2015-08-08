@@ -19,7 +19,7 @@ import akka.actor.ActorSystem
 
 class LocationServiceSpec extends Specification with Specs2RouteTest with HttpService {
   def actorRefFactory = system
-  //  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(5, SECONDS))
+    implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(5, SECONDS))
 
   /*
    * Directives debugging

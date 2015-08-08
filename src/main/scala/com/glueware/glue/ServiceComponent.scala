@@ -29,6 +29,7 @@ object ServiceComponent {
 
 /*
  * This class defines our service behavior for a function 
+ * and provides a route
  */
 class ServiceComponent[T, R](function: FutureFunction1[T, R])(
   implicit val executionContext: ExecutionContext,
@@ -49,26 +50,35 @@ class ServiceComponent[T, R](function: FutureFunction1[T, R])(
   def apply(input: T): Future[R] =
     function.apply(Future(input))
 
-  // By convention we generate the path from the name
-  val items = name.split(Array('$', '.')).toList
+  // constructing the route
 
-  // We have to combine the items of name to a new "path" directive
-  val _path = items match {
-    case (head1 :: head2 :: tail) => path(((head1 / head2) /: tail)((x, y) => x / y))
-    case (head1 :: Nil)           => path(head1)
-    case Nil                      => noop
+  /**
+   * By convention we generate the path from the name
+   * We have to combine the $ or . separated components of the  name to a new "path" directive _path
+   * This could be improved by dropping the first components e.g. "com.glueware.glue"
+   */
+  private val _path = {
+    val items = name.split(Array('$', '.')).toList
+
+    items match {
+      case (head1 :: head2 :: tail) => path(((head1 / head2) /: tail)((x, y) => x / y))
+      case (head1 :: Nil)           => path(head1)
+      case Nil                      => noop
+    }
   }
 
+  /**
+   * partial route which is composed by service to the route of the server
+   */
   val route: Route =
-    logRequest("request") {
-      _path {
-        post {
-          entity(as[T]) { input =>
-            produce(instanceOf[R]) { output =>
-              onComplete(apply(input)) {
-                case Success(value)     => complete(OK, value.asInstanceOf[R])
-                case Failure(exepction) => complete(InternalServerError, s"An error occurred: ${exepction.getMessage}")
-              }
+    _path {
+      post {
+        entity(as[T]) { input =>
+          produce(instanceOf[R]) { output =>
+            onComplete(apply(input)) {
+              case Success(value)                        => complete(OK, value.asInstanceOf[R])
+              case Failure(exepction: FunctionException) => complete(exepction.status, s"An error occurred: ${exepction.getMessage}")
+              case Failure(exepction)                    => complete(InternalServerError, s"An error occurred: ${exepction.getMessage}")
             }
           }
         }

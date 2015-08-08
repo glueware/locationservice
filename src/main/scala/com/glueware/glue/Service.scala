@@ -8,6 +8,9 @@ import spray.routing.Directives
 /**
  * @author Jörg
  */
+/**
+ * Combines the routes of ServiceComponents to a common route
+ */
 abstract class Service extends Directives {
   def apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Set[ServiceComponent[_, _]]
 
@@ -18,7 +21,7 @@ abstract class Service extends Directives {
     // can be optimized by grouping parts of the paths
     routes match {
       case (head :: tail) => tail.fold[Route](head)((s1, s2) => s1 ~ s2)
-      case Nil            => (_ => ())
+      case Nil            => reject
     }
   }
 }

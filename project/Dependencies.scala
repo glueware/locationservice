@@ -8,6 +8,8 @@ object Version {
   val sprayJson = "1.3.2"
   val scalaTest = "2.2.4"
   val spec2 = "2.3.13"
+  val argonaut = "6.0.4"
+//  val scalaz = "7.1.3"
 }
 
 object Library {
@@ -22,14 +24,16 @@ object Library {
   val sprayJson = "io.spray" %% "spray-json" % Version.sprayJson
   val sprayTest = "io.spray" %% "spray-testkit" % Version.spray
   val scalaTest = "org.scalatest" %% "scalatest" % Version.scalaTest
-  val spec2 = "org.specs2" %% "specs2" % Version.spec2 
+  val spec2 = "org.specs2" %% "specs2" % Version.spec2
+  val argonaut = "io.argonaut" %% "argonaut" % Version.argonaut
+//  val scalaz = "org.scalaz" %% "scalaz-core" % Version.scalaz
 }
 
 object Dependencies {
 
   import Library._
 
-  val lib = List(    
+  val lib = List(
     akkaKernel,
     akkaActor,
     akkaSlf4j,
@@ -38,9 +42,11 @@ object Dependencies {
     sprayRouting,
     sprayClient,
     sprayJson,
+    argonaut,
+//    scalaz,
     akkaTestkit % "test",
     scalaTest % "test",
     sprayTest % "test",
     spec2 % "test")
-    
+
 }

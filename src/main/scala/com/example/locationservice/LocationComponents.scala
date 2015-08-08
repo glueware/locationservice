@@ -22,7 +22,7 @@ class LocationComponents()
     extends Service
     with Directives
     with SprayJsonSupport {
-  val googleLocate: FutureFunction1[Address, GoogleApiResult[Location]] = GoogleLocate()
+  val googleLocate: FutureFunction1[Address, GeocodingResult] = GeocodingLocate()
   val locate: FutureFunction1[Address, ServiceLocation] = Locate(googleLocate)
 
   // wire the service, here it is simple just one function calling another

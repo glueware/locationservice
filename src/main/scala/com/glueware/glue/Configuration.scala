@@ -12,8 +12,6 @@ trait Configuration {
   protected implicit val system: ActorSystem
   protected lazy val configuration = system.settings.config
 
-  val settings: Settings
-
   class Settings {
     def getString(property: String): String =
       configuration.getString(configEntry + "." + property)
