@@ -40,6 +40,7 @@ class LocationServiceSpec extends Specification with Specs2RouteTest with HttpSe
 
   // get the execution environment
   implicit val _ = system.dispatcher
+  implicit val l = system.log
   val route = (new LocationComponents()).route()
 
   val json = """{"address": "Eendrachtlaan 315, Utrecht"}"""

@@ -2,13 +2,15 @@ package com.example.locationservice
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import spray.util.LoggingContext
+import spray.http.StatusCodes.BadRequest
+import spray.http.StatusCodes.InternalServerError
+import spray.json.DefaultJsonProtocol
+
 
 import com.glueware.glue.FutureFunction1
 
 import GeocodingStatusCodes.OK
-import spray.http.StatusCodes.BadRequest
-import spray.http.StatusCodes.InternalServerError
-import spray.json.DefaultJsonProtocol
 
 /**
  * Output class for ServiceLocation
@@ -34,7 +36,7 @@ case class Locate(googleLocate: FutureFunction1[Address, GeocodingResult])
     extends FutureFunction1[Address, ServiceLocation] {
 
   // Members declared in scala.Function1 
-  def _apply(address: Future[Address])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[ServiceLocation] = {
+  def _apply(address: Future[Address])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[ServiceLocation] = {
     def googleResultToLocation(geocodingResult: GeocodingResult): ServiceLocation = {
 
       import GeocodingStatusCodes._

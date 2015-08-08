@@ -4,6 +4,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.{ Success, Failure }
 import akka.util.Timeout
+import spray.util.LoggingContext
 import argonaut.Argonaut.StringToParseWrap
 import argonaut.Argonaut.jArrayPL
 import argonaut.Argonaut.jNumberPL
@@ -23,15 +24,14 @@ import spray.json.JsonFormat
 import com.glueware.glue.FutureFunction1
 import scala.concurrent.Promise
 import akka.pattern.AskTimeoutException
-
 import scala.util.control.NonFatal
+
+import java.net.URLEncoder
 
 /**
  * The GeocodingStatusCodes express a contract with Google Geocoding.
  *
  * <a>https://developers.google.com/maps/documentation/geocoding/intro</a>
- *
- *
  *
  */
 object GeocodingStatusCodes extends Enumeration {
@@ -125,7 +125,7 @@ case class GeocodingLocate()
   /**
    * construct the end result
    */
-  private def gecodingResult(httpResponse: HttpResponse, address: Future[Address]): GeocodingResult = {
+  private def responseToResult(httpResponse: HttpResponse, address: Future[Address]): GeocodingResult = {
     val parsedEntity = httpResponse.entity.asString.parseOption
 
     // extract by lenses from parsedEntity
@@ -140,7 +140,7 @@ case class GeocodingLocate()
       case Some("OK") if _location == None =>
         throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status OK but no location")
       case Some("ZERO_RESULTS") if _location != None =>
-        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but also location(s)")
+        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but nevertheless location(s)")
       case _ =>
         GeocodingResult(GeocodingStatusCodes.withName(_status.get), _location) // everything OK!
     }
@@ -148,28 +148,32 @@ case class GeocodingLocate()
 
   // Member declared in scala.Function1 
   protected def _apply(address: Future[Address])(
-    implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[GeocodingResult] = {
+    implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[GeocodingResult] = {
     import akka.util.Timeout
     import scala.concurrent.duration._
     implicit val timeout = Timeout(5 seconds)
 
-    //    val googleLocateUri = URLEncode ...
-    val uri = """https://maps.googleapis.com/maps/api/geocode/json?address=1600+Amphitheatre+Parkway,+Mountain+View,+CA"""
+    val geoCodingUri = """https://maps.googleapis.com/maps/api/geocode/json?address="""
+    def addressToUri(a: Address) =
+      geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
 
     val pipeline = sendReceive
-    val response = pipeline(Get(uri))
-    response.map { r =>
-      gecodingResult(r, address)
-    }
 
-    //    Future(GeocodingResult(OK, Some(Location(5, 3))))
+    val response = for {
+      a <- address
+      r <- pipeline(Get(addressToUri(a)))
+    } yield r
+
     val result = Promise[GeocodingResult]()
+
+    // convert exceptions to to FunctionException
     response.onComplete {
-      case Success(value) => result.success(gecodingResult(value, address))
-      case Failure(exception) => exception match {
-        case exception: AskTimeoutException => FunctionException(address, httpStatusCodes.GatewayTimeout, s"Google Geocoding did not receive a timely response specified by URI (${uri})")
-        case NonFatal(exception)            => FunctionException(address, httpStatusCodes.InternalServerError, "Google Geocoding failed to request URI (${uri}) due to an exception ()", Some(exception))
-      }
+      case Success(value) =>
+        result.success(responseToResult(value, address))
+      case Failure(exception: AskTimeoutException) =>
+        FunctionException(address, httpStatusCodes.GatewayTimeout, s"Did not receive a timely response from Google Geocoding", Some(exception))
+      case Failure(exception) =>
+        FunctionException(address, httpStatusCodes.InternalServerError, "Failed to request Google Geocoding due to an exception ()", Some(exception))
     }
     result.future
   }

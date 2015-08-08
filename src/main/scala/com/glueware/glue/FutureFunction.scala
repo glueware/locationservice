@@ -2,6 +2,7 @@ package com.glueware.glue
 
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
+import spray.util.LoggingContext
 import spray.http.StatusCode
 
 /**
@@ -12,9 +13,8 @@ import spray.http.StatusCode
  * - akka clusters
  * - etc.
  *
- * There is difference to nowadays implementations. Not the caller decides if the call is asynchronous but the callee.
- * Is that OK?
- * If not then the function may be wrapped in a similar manner as for services - now as actor.
+ * There is a difference to nowadays philosophy. Not the caller decides if the call is asynchronous but the callee. Is that OK?
+ * If not then the function may be wrapped in a similar manner as for services - now with an actor.
  *
  * By wrapping _apply( ... ) with the same signature as apply( ... ) the handling of various aspects may be done:
  * - Logging
@@ -30,33 +30,56 @@ trait FutureFunction /* extends Configuration - needs implicit ActorSystem*/ {
   //  val configEntry = name
 }
 
+/**
+ * Message must not be used for construction an external error http response
+ * Exception is included and may reveal information for attacks
+ * Message is used for internal error logging
+ */
+case class InternalExceptionMessage(functionName: String, parameters: Seq[Future[_]], status: StatusCode, description: String, exception: Option[Exception])
+
+/**
+ * Message is used for construction an external error http response
+ * Exception is excluded because of security concerns
+ */
+case class ExternalExceptionMessage(functionName: String, parameters: Seq[Future[_]], status: StatusCode, description: String)
+
+/**
+ * Unified interface for exceptions occurring functions
+ */
 trait FunctionException extends RuntimeException {
   val functionName: String
   val parameters: Seq[Future[_]]
   val status: StatusCode
   val description: String
   val exception: Option[Exception] = None
-  override def getMessage() = s"""functionName: ${functionName}, parameters: ${parameters}, status: ${status}, description: ${description})"""
+  val internalMessage = InternalExceptionMessage(functionName, parameters, status, description, exception).toString
+  val externalMessage = ExternalExceptionMessage(functionName, parameters, status, description).toString
+  override def getMessage() = externalMessage
 }
 
 trait FutureFunction0[+R] extends FutureFunction {
   self =>
 
   /**
-   * This is the method a developer has to implement
+   * Abstract method to be implemented
    */
-  protected def _apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[R]
-  def apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[R] = {
+  protected def _apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[R]
+
+  /**
+   *
+   */
+  def apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[R] = {
     def beforeCall() {
-      // TODO: Aspects to be handled before call      
+      log.debug(s"""calling ${name}""")
     }
-    def afterCall() {
-      // TODO: Aspects to be handled after call      
+
+    def afterCall(returnValue: Future[R]) {
+      log.debug(s"""returning from ${name} with paramter returnValue (${returnValue})""")
     }
 
     beforeCall()
     val returnValue = _apply()
-    afterCall()
+    afterCall(returnValue)
     returnValue
   }
 
@@ -67,18 +90,25 @@ trait FutureFunction0[+R] extends FutureFunction {
 
 trait FutureFunction1[T, +R] extends FutureFunction {
   self =>
+
   /**
-   * This is the method a developer has to implement
+   * Abstract method to be implemented
    */
-  protected def _apply(parameter: Future[T])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[R]
-  def apply(parameter: Future[T])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[R] = {
-    // TODO: Aspects to be handled before call
+  protected def _apply(parameter: Future[T])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[R]
+  def apply(parameter: Future[T])(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Future[R] = {
+    def beforeCall(parameter: Future[T]) {
+      log.error(s"""calling ${name} with parameter ${parameter}""")
+    }
+
+    def afterCall(parameter: Future[T], returnValue: Future[R]) {
+      returnValue.onComplete { r =>
+        log.error(s"""returning from ${name} with value ${r}""")
+      }
+    }
+
     _apply(parameter)
-    // TODO: Aspects to be handled after call
   }
   case class FunctionException[T](parameter: Future[T], status: StatusCode, description: String, exception: Option[Throwable] = None) extends RuntimeException {
     val functionName = self.name
   }
 }
-
-

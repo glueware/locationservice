@@ -17,7 +17,16 @@ import spray.json.RootJsonFormat
 import spray.routing.Directive.pimpApply
 import spray.routing.Directives
 import spray.routing.Route
+import spray.util.LoggingContext
 
+/**
+ * The class where the application logic is wired
+ * The components googleLocate and locate may be overriden for testing purposes
+ * - mock function
+ * - throwing exception
+ * - producing a time out
+ * 
+ */
 class LocationComponents()
     extends Service
     with Directives
@@ -27,7 +36,7 @@ class LocationComponents()
 
   // wire the service, here it is simple just one function calling another
   // final: application logic is not allowed to be changed
-  final def apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Set[ServiceComponent[_, _]] = {
+  final def apply()(implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext, log: LoggingContext): Set[ServiceComponent[_, _]] = {
     // in the service context the FutureFunction1 implicitly becomes a ServiceComponent
     Set(locate)
   }

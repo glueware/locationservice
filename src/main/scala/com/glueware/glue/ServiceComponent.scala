@@ -4,7 +4,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
-
 import spray.http.StatusCodes.InternalServerError
 import spray.http.StatusCodes.OK
 import spray.httpx.SprayJsonSupport
@@ -14,6 +13,7 @@ import spray.routing.Directive.pimpApply
 import spray.routing.Directives
 import spray.routing.Route
 import spray.routing.directives.OnCompleteFutureMagnet.apply
+import spray.util.LoggingContext
 
 /*
  * Provides implicit conversions for various context
@@ -32,8 +32,9 @@ object ServiceComponent {
  * and provides a route
  */
 class ServiceComponent[T, R](function: FutureFunction1[T, R])(
-  implicit val executionContext: ExecutionContext,
   implicit val refFactory: akka.actor.ActorRefFactory,
+  val executionContext: ExecutionContext,
+  log: LoggingContext,
   jsonT: RootJsonFormat[T], // used by SprayJsonSupport
   jsonR: RootJsonFormat[R])
     extends Directives
@@ -76,9 +77,15 @@ class ServiceComponent[T, R](function: FutureFunction1[T, R])(
         entity(as[T]) { input =>
           produce(instanceOf[R]) { output =>
             onComplete(apply(input)) {
-              case Success(value)                        => complete(OK, value.asInstanceOf[R])
-              case Failure(exepction: FunctionException) => complete(exepction.status, s"An error occurred: ${exepction.getMessage}")
-              case Failure(exepction)                    => complete(InternalServerError, s"An error occurred: ${exepction.getMessage}")
+              case Success(value) => complete(OK, value)
+              case Failure(exception: FunctionException) => {
+                log.error(exception.getMessage())
+                complete(exception.status, s"An error occurred in service ${name} at function ${exception.functionName}: ${exception.description}")
+              }
+              case Failure(exception) => {
+                log.error(exception.getMessage())
+                complete(InternalServerError, s"An error occurred in service ${name}: ${exception.getMessage}")
+              }
             }
           }
         }
