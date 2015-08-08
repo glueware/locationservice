@@ -1,9 +1,13 @@
 package com.example.locationservice
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.util.{ Success, Failure }
-import akka.util.Timeout
+import java.net.URLEncoder
+
+import scala.util.Try
+
+import com.glueware.glue.Client
+
+import akka.actor.ActorSystem
+
 import argonaut.Argonaut.StringToParseWrap
 import argonaut.Argonaut.jArrayPL
 import argonaut.Argonaut.jNumberPL
@@ -12,26 +16,20 @@ import argonaut.Argonaut.jStringPL
 import argonaut.Argonaut.jsonArrayPL
 import argonaut.Argonaut.jsonObjectPL
 import argonaut.Json
+
 import spray.client.pipelining.Get
-import spray.client.pipelining.sendReceive
+import spray.http.HttpRequest
 import spray.http.HttpResponse
 import spray.http.{ StatusCodes => httpStatusCodes }
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import spray.json.JsValue
 import spray.json.JsonFormat
-import com.glueware.glue.FutureFunction1
-import scala.concurrent.Promise
-import akka.pattern.AskTimeoutException
-
-import scala.util.control.NonFatal
 
 /**
  * The GeocodingStatusCodes express a contract with Google Geocoding.
  *
  * <a>https://developers.google.com/maps/documentation/geocoding/intro</a>
- *
- *
  *
  */
 object GeocodingStatusCodes extends Enumeration {
@@ -44,7 +42,6 @@ object GeocodingStatusCodes extends Enumeration {
   UNKNOWN_ERROR //  indicates that the request could not be processed due to a server error. The request may succeed if you try again.
   = Value
 }
-
 import GeocodingStatusCodes._
 
 /**
@@ -54,7 +51,7 @@ case class Location(lat: Double, lng: Double)
 case class GeocodingResult(status: GeocodingStatusCodes.Value, location: Option[Location])
 
 /**
- * Implicit conversions needed when wrapping GoogleLocate by a ServiceComponent
+ * Implicit conversions needed when wrapping GoogleLocate by a ApiComponent
  * Unused in our example
  * see package object
  */
@@ -70,6 +67,7 @@ trait GoogleJsonProtocol extends DefaultJsonProtocol {
   implicit val locationJson = jsonFormat2(Location)
   implicit val googleLocationJson = jsonFormat2(GeocodingResult)
 }
+
 /**
  * Uses Google Geocoding API.
  * The GeocodingStatusCodes express a contract with Google Geocoding.
@@ -81,8 +79,8 @@ trait GoogleJsonProtocol extends DefaultJsonProtocol {
  * which you can use to place markers on a map, or position the map."
  *
  */
-case class GeocodingLocate()
-    extends FutureFunction1[Address, GeocodingResult]
+case class GeocodingLocate(implicit system: ActorSystem)
+    extends Client[Address, GeocodingResult]
     with DefaultJsonProtocol {
 
   private val statusLens = jObjectPL >=>
@@ -123,9 +121,9 @@ case class GeocodingLocate()
   }
 
   /**
-   * construct the end result
+   * construct the result from the response
    */
-  private def gecodingResult(httpResponse: HttpResponse, address: Future[Address]): GeocodingResult = {
+  protected def responseToResult(httpResponse: HttpResponse, address: Option[Try[Address]]): GeocodingResult = {
     val parsedEntity = httpResponse.entity.asString.parseOption
 
     // extract by lenses from parsedEntity
@@ -140,37 +138,16 @@ case class GeocodingLocate()
       case Some("OK") if _location == None =>
         throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status OK but no location")
       case Some("ZERO_RESULTS") if _location != None =>
-        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but also location(s)")
+        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but nevertheless location(s)")
       case _ =>
         GeocodingResult(GeocodingStatusCodes.withName(_status.get), _location) // everything OK!
     }
   }
 
-  // Member declared in scala.Function1 
-  protected def _apply(address: Future[Address])(
-    implicit refFactory: akka.actor.ActorRefFactory, executionContext: ExecutionContext): Future[GeocodingResult] = {
-    import akka.util.Timeout
-    import scala.concurrent.duration._
-    implicit val timeout = Timeout(5 seconds)
-
-    //    val googleLocateUri = URLEncode ...
-    val uri = """https://maps.googleapis.com/maps/api/geocode/json?address=1600+Amphitheatre+Parkway,+Mountain+View,+CA"""
-
-    val pipeline = sendReceive
-    val response = pipeline(Get(uri))
-    response.map { r =>
-      gecodingResult(r, address)
-    }
-
-    //    Future(GeocodingResult(OK, Some(Location(5, 3))))
-    val result = Promise[GeocodingResult]()
-    response.onComplete {
-      case Success(value) => result.success(gecodingResult(value, address))
-      case Failure(exception) => exception match {
-        case exception: AskTimeoutException => FunctionException(address, httpStatusCodes.GatewayTimeout, s"Google Geocoding did not receive a timely response specified by URI (${uri})")
-        case NonFatal(exception)            => FunctionException(address, httpStatusCodes.InternalServerError, "Google Geocoding failed to request URI (${uri}) due to an exception ()", Some(exception))
-      }
-    }
-    result.future
+  private val geoCodingUri = """https://maps.googleapis.com/maps/api/geocode/json?address="""
+  protected def inputToRequest(address: Address): HttpRequest = {
+    def addressToUri(a: Address) =
+      geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
+    Get(addressToUri(address))
   }
 }

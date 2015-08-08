@@ -8,6 +8,8 @@ compileOrder := CompileOrder.Mixed
 
 libraryDependencies ++= Dependencies.lib
 
+scalacOptions in Test ++= Seq("-Yrangepos", "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls", "-feature")
+
 Revolver.settings
 
 EclipseKeys.createSrc := EclipseCreateSrc.Default + EclipseCreateSrc.Resource

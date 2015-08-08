@@ -16,7 +16,7 @@ import spray.json.DefaultJsonProtocol
 case class Address(address: String)
 
 /**
- * Implicit conversions needed when wrapping a FutureFunction by a ServiceComponent
+ * Implicit conversions needed when wrapping a FutureFunction by a ApiComponent
  * 
  * see package object
  */

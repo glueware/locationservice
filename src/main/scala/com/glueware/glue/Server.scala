@@ -10,7 +10,7 @@ import akka.io.IO
 import spray.can.Http
 import spray.routing.Route
 
-case class Server(systemName: String, serviceFactory: Service) {
+case class Server(systemName: String, serviceFactory: ApiFactory) {
   server =>
   //  Construct the ActorSystem we will use in our application
   implicit private lazy val system: ActorSystem = ActorSystem(systemName)
@@ -19,15 +19,15 @@ case class Server(systemName: String, serviceFactory: Service) {
   sys.addShutdownHook(system.shutdown())
 
   // get the execution environment
-  implicit val _ = system.dispatcher
+  //  implicit val executionContext = system.dispatcher
 
-  private val route: Route = serviceFactory.route()
+  private val route: Route = ???
 
-  private val listener = system.actorOf(Props(new ServiceActor(route)))
+  private val listener = ServiceActor(serviceFactory)
 
   // Get Server settings for Http.Bind
   private val configuration = new Configuration {
-    val system = server.system
+    val configuration = system.settings.config
     val configEntry = systemName
     lazy val settings = new Settings {
       val interface: String = getString("interface")
@@ -43,4 +43,5 @@ case class Server(systemName: String, serviceFactory: Service) {
     port = port)
 
   // http://stackoverflow.com/questions/24731242/spray-can-webservice-graceful-shutdown
+  // http://flurdy.com/docs/scalainit/startscala.html
 }

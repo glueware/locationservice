@@ -9,14 +9,27 @@ import spray.routing.RouteConcatenation._
 import spray.routing.HttpService
 import akka.actor.ActorLogging
 import akka.actor.Actor
+import spray.routing.HttpServiceActor
+import akka.actor.Props
+import akka.actor.ActorSystem
+import scala.concurrent.ExecutionContext
 
-class ServiceActor(route: Route)
+object ServiceActor {
+  def apply(serviceFactory: ApiFactory)(implicit system: ActorSystem) = {
+    val serviceActor = new ServiceActor {
+      val route: Route = serviceFactory.create.route()
+    }
+    system.actorOf(Props(serviceActor))
+  }
+}
+abstract class ServiceActor
     extends Actor
-    with ActorLogging
-    with HttpService {
+    with HttpService
+    with ActorLogging {
 
-  implicit def actorRefFactory = context
+  val actorRefFactory = context
+  val route: Route
 
-  def receive: Receive =
+  val receive: Receive =
     runRoute(route)
 }

@@ -1,6 +1,7 @@
 package com.glueware.glue
 
 import akka.actor.ActorSystem
+import com.typesafe.config.Config
 
 /**
  * @author Jörg
@@ -8,9 +9,8 @@ import akka.actor.ActorSystem
 trait Configuration {
   self =>
 
+  protected val configuration: Config
   protected val configEntry: String
-  protected implicit val system: ActorSystem
-  protected lazy val configuration = system.settings.config
 
   class Settings {
     def getString(property: String): String =

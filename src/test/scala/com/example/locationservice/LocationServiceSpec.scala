@@ -17,9 +17,15 @@ import scala.concurrent.duration._
 import akka.testkit._
 import akka.actor.ActorSystem
 
-class LocationServiceSpec extends Specification with Specs2RouteTest with HttpService {
+import spray.httpx.SprayJsonSupport
+
+class LocationServiceSpec
+    extends Specification
+    with Specs2RouteTest
+    with HttpService
+    with SprayJsonSupport {
   def actorRefFactory = system
-    implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(5, SECONDS))
+  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(10, SECONDS))
 
   /*
    * Directives debugging
@@ -31,7 +37,7 @@ class LocationServiceSpec extends Specification with Specs2RouteTest with HttpSe
     def requestMethodAndResponseStatusAsInfo(req: HttpRequest): Any => Option[LogEntry] = {
       case _ => Some(LogEntry(req.toString))
     }
-    
+
     // This one doesn't use the implicit LoggingContext but uses `println` for logging
     def printRequestMethodAndResponseStatus(req: HttpRequest)(res: Any): Unit =
       println(requestMethodAndResponseStatusAsInfo(req)(res).map(_.obj.toString).getOrElse(""))
@@ -40,7 +46,8 @@ class LocationServiceSpec extends Specification with Specs2RouteTest with HttpSe
 
   // get the execution environment
   implicit val _ = system.dispatcher
-  val route = (new LocationComponents()).route()
+  implicit val l = system.log
+  val route = ServiceApi.create().route()
 
   val json = """{"address": "Eendrachtlaan 315, Utrecht"}"""
 
@@ -49,7 +56,11 @@ class LocationServiceSpec extends Specification with Specs2RouteTest with HttpSe
     "return status OK POST " in {
       HttpRequest(method = POST, uri = locateUri,
         entity = HttpEntity(`application/json`, json)) ~> logRequestResponsePrintln(route) ~> check {
-          status === OK
+          response.status should be equalTo OK
+          response.entity should not be equalTo(None)
+          val serviceLocation = responseAs[ServiceLocation]
+          serviceLocation.latitude must beCloseTo(52.0618174, 0.5)
+          serviceLocation.longitude must beCloseTo(5.1085974, 0.5)
         }
     }
   }
