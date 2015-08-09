@@ -2,6 +2,10 @@ package com.example.locationservice
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import spray.util.LoggingContext
+import spray.http.StatusCodes.BadRequest
+import spray.http.StatusCodes.InternalServerError
+import spray.json.DefaultJsonProtocol
 
 import com.glueware.glue.FutureFunction1
 

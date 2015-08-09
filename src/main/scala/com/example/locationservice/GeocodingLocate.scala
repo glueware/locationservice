@@ -7,7 +7,6 @@ import scala.util.Try
 import com.glueware.glue.Client
 
 import akka.actor.ActorSystem
-
 import argonaut.Argonaut.StringToParseWrap
 import argonaut.Argonaut.jArrayPL
 import argonaut.Argonaut.jNumberPL
@@ -16,7 +15,6 @@ import argonaut.Argonaut.jStringPL
 import argonaut.Argonaut.jsonArrayPL
 import argonaut.Argonaut.jsonObjectPL
 import argonaut.Json
-
 import spray.client.pipelining.Get
 import spray.http.HttpRequest
 import spray.http.HttpResponse
@@ -150,4 +148,5 @@ case class GeocodingLocate(implicit system: ActorSystem)
       geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
     Get(addressToUri(address))
   }
+
 }
