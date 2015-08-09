@@ -53,7 +53,7 @@ case class InternalExceptionMessage(functionName: String, parameters: Seq[Option
 case class ExternalExceptionMessage(functionName: String, parameters: Seq[Option[Try[_]]], status: StatusCode, description: String)
 
 /**
- * Unified interface for exceptions occurring functions
+ * Unified interface for exceptions occurring during function evaluation
  */
 abstract class FunctionException extends RuntimeException {
   val functionName: String
