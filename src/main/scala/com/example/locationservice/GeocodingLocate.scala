@@ -148,5 +148,4 @@ case class GeocodingLocate(implicit system: ActorSystem)
       geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
     Get(addressToUri(address))
   }
-
 }
