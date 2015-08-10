@@ -1,25 +1,28 @@
 package com.glueware.glue
 
-import scala.concurrent.ExecutionContext
-import spray.routing.RouteConcatenation._
-import spray.routing.Route
-import spray.routing.Directives
-import spray.util.LoggingContext
-import spray.http.StatusCodes.OK
-import com.typesafe.config.Config
-import akka.actor.ActorSystem
-import spray.httpx.SprayJsonSupport
-
 /**
  * @author Jörg
  */
 
+import scala.concurrent.ExecutionContext
+import spray.routing.RouteConcatenation._
+import spray.routing.Route
+import spray.routing.Directives
+import akka.event.LoggingAdapter
+import spray.http.StatusCodes.OK
+import com.typesafe.config.Config
+import akka.actor.ActorRefFactory
+import spray.httpx.SprayJsonSupport
+
 /**
  * Combines the routes of ServiceComponents to a common route
  */
-abstract class Api()(implicit system: ActorSystem)
+abstract class Api()(implicit functionContext: FunctionContext)
     extends Directives
     with SprayJsonSupport {
+
+  import functionContext._
+
   /**
    * The method where the application logic is wired
    *
@@ -39,5 +42,8 @@ abstract class Api()(implicit system: ActorSystem)
 }
 
 abstract class ApiFactory {
-  def create()(implicit system: ActorSystem): Api
+  def apply()(implicit functionContext: FunctionContext): Api
 }
+
+// Extracted abstract Interfaces. e.g. ILocation
+// Enables to construct various test cases.

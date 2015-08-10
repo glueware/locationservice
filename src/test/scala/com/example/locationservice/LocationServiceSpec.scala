@@ -10,44 +10,56 @@ import spray.http.Uri.apply
 import spray.routing.HttpService
 import spray.routing.directives.{ LoggingMagnet, LogEntry, DebuggingDirectives }
 import spray.testkit.Specs2RouteTest
-import spray.util.LoggingContext
+import akka.event.LoggingAdapter
 import spray.routing.Directive.pimpApply
 import spray.routing.directives.LoggingMagnet.forMessageFromMarker
 import scala.concurrent.duration._
 import akka.testkit._
 import akka.actor.ActorSystem
-
 import spray.httpx.SprayJsonSupport
+import com.glueware.glue._
 
+import org.junit.runner.RunWith
+import org.specs2.runner.JUnitRunner
+
+@RunWith(classOf[JUnitRunner])
 class LocationServiceSpec
     extends Specification
     with Specs2RouteTest
     with HttpService
     with SprayJsonSupport {
+
+  // get the execution environment
+  implicit val excutionContext = system.dispatcher
+  implicit val log = system.log
   def actorRefFactory = system
-  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(10, SECONDS))
+
+  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(100, SECONDS))
 
   /*
-   * Directives debugging
-   */
+     * Directives debugging
+     */
   val logRequestResponsePrintln = {
-    implicit val la: LoggingContext = null
+    implicit val la: LoggingAdapter = null
     DebuggingDirectives.logRequest("location-service")
 
     def requestMethodAndResponseStatusAsInfo(req: HttpRequest): Any => Option[LogEntry] = {
       case _ => Some(LogEntry(req.toString))
     }
 
-    // This one doesn't use the implicit LoggingContext but uses `println` for logging
+    // This one doesn't use the implicit LoggingAdapter but uses `println` for logging
     def printRequestMethodAndResponseStatus(req: HttpRequest)(res: Any): Unit =
       println(requestMethodAndResponseStatusAsInfo(req)(res).map(_.obj.toString).getOrElse(""))
     DebuggingDirectives.logRequestResponse(LoggingMagnet(printRequestMethodAndResponseStatus))
   }
 
-  // get the execution environment
-  implicit val _ = system.dispatcher
-  implicit val l = system.log
-  val route = ServiceApi.create().route()
+  implicit val functionContext = FunctionContext()(
+    actorRefFactory = system,
+    executionContext = system.dispatcher,
+    configuration = system.settings.config,
+    log = system.log)
+
+  val route = LocationApi.apply().route()
 
   val json = """{"address": "Eendrachtlaan 315, Utrecht"}"""
 

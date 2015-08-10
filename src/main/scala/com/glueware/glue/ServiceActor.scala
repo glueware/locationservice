@@ -15,19 +15,23 @@ import akka.actor.ActorSystem
 import scala.concurrent.ExecutionContext
 
 object ServiceActor {
-  def apply(serviceFactory: ApiFactory)(implicit system: ActorSystem) = {
-    val serviceActor = new ServiceActor {
-      val route: Route = serviceFactory.create.route()
+  def apply(apiFactory: ApiFactory)() =
+    new ServiceActor {
+      implicit val functionContext = FunctionContext()(
+        actorRefFactory = context,
+        executionContext = system.dispatcher,
+        configuration = system.settings.config,
+        log = system.log)
+      val route: Route = apiFactory.apply.route()
     }
-    system.actorOf(Props(serviceActor))
-  }
 }
 abstract class ServiceActor
     extends Actor
-    with HttpService
-    with ActorLogging {
+    with HttpService {
 
-  val actorRefFactory = context
+  val system = context.system
+
+  implicit val actorRefFactory = context
   val route: Route
 
   val receive: Receive =

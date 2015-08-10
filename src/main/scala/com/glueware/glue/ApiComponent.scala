@@ -13,9 +13,9 @@ import spray.routing.Directive.pimpApply
 import spray.routing.Directives
 import spray.routing.Route
 import spray.routing.directives.OnCompleteFutureMagnet.apply
-import spray.util.LoggingContext
+import akka.event.LoggingAdapter
 import com.typesafe.config.Config
-import akka.actor.ActorSystem
+import akka.actor.ActorRefFactory
 
 /*
  * Provides implicit conversions for various context
@@ -23,8 +23,7 @@ import akka.actor.ActorSystem
 object ApiComponent {
   implicit def apiComponent[T, R](
     function: FutureFunction1[T, R])(
-      implicit system: ActorSystem,
-      log: LoggingContext,
+      implicit functionContext: FunctionContext,
       jsonT: RootJsonFormat[T],
       jsonR: RootJsonFormat[R]) = new ApiComponent[T, R](function)
 }
@@ -34,14 +33,13 @@ object ApiComponent {
  * and provides a route
  */
 class ApiComponent[T, R](function: FutureFunction1[T, R])(
-  implicit system: ActorSystem,
-  log: LoggingContext,
+  implicit functionContext: FunctionContext,
   jsonT: RootJsonFormat[T], // used by SprayJsonSupport
   jsonR: RootJsonFormat[R])
     extends Directives
     with SprayJsonSupport {
 
-  implicit val executionContext = system.dispatcher
+  import functionContext._
 
   /**
    * The name of a service component
@@ -82,11 +80,11 @@ class ApiComponent[T, R](function: FutureFunction1[T, R])(
             onComplete(apply(input)) {
               case Success(value) => complete(OK, value)
               case Failure(exception: FunctionException) => {
-                log.error(exception.getMessage())
+//                log.error(exception.internalMessage)
                 complete(exception.status, s"An error occurred in service ${name} at function ${exception.functionName}: ${exception.description}")
               }
               case Failure(exception) => {
-                log.error(exception.getMessage())
+//                log.error(exception.internalMessage)
                 complete(InternalServerError, s"An error occurred in service ${name}: ${exception.getMessage}")
               }
             }

@@ -3,10 +3,12 @@ package com.example.locationservice
 import java.net.URLEncoder
 
 import scala.util.Try
+import scala.concurrent.duration._
 
-import com.glueware.glue.Client
+import com.glueware.glue._
 
-import akka.actor.ActorSystem
+import akka.util.Timeout
+import akka.actor.ActorRefFactory
 import argonaut.Argonaut.StringToParseWrap
 import argonaut.Argonaut.jArrayPL
 import argonaut.Argonaut.jNumberPL
@@ -43,15 +45,14 @@ object GeocodingStatusCodes extends Enumeration {
 import GeocodingStatusCodes._
 
 /**
- * Output classes for GeocodingLocate
+ * Output classes of GeocodingLocate
  */
 case class Location(lat: Double, lng: Double)
 case class GeocodingResult(status: GeocodingStatusCodes.Value, location: Option[Location])
 
 /**
- * Implicit conversions needed when wrapping GoogleLocate by a ApiComponent
- * Unused in our example
- * see package object
+ * Implicit conversions of output classes of GeocodingLocate needed when wrapping GoogleLocate by an ApiComponent (not in our example) or testing.
+ * @see com.example.locationservice
  */
 trait GoogleJsonProtocol extends DefaultJsonProtocol {
   trait GoogleStatusCodesJsonFormat extends JsonFormat[GeocodingStatusCode] {
@@ -67,61 +68,87 @@ trait GoogleJsonProtocol extends DefaultJsonProtocol {
 }
 
 /**
- * Uses Google Geocoding API.
- * The GeocodingStatusCodes express a contract with Google Geocoding.
- *
+ * Abstract interface of GeocodingLocate
+ */
+abstract class IGeocodingLocate(implicit functionContext: FunctionContext)
+  extends IClient[Address, GeocodingResult]
+
+/**
+ * This is the main class that implements the web client access to Google Geocaching.
  * <a>https://developers.google.com/maps/documentation/geocoding/intro</a>
+ * It uses the abstract Client class which is an abstract implementation for the web client access.
+ *
+ * The GeocodingStatusCodes express a contract with Google Geocoding.
  *
  * Google: "Geocoding is the process of converting addresses (like "1600 Amphitheatre Parkway, Mountain View, CA")
  * into geographic coordinates (like latitude 37.423021 and longitude -122.083739),
  * which you can use to place markers on a map, or position the map."
  *
  */
-case class GeocodingLocate(implicit system: ActorSystem)
-    extends Client[Address, GeocodingResult]
-    with DefaultJsonProtocol {
+case class GeocodingLocate(implicit functionContext: FunctionContext)
+    extends Client[Address, GeocodingResult] {
 
-  private val statusLens = jObjectPL >=>
-    jsonObjectPL("status") >=>
-    jStringPL
+  /**
+   * Calling Google Geocaching takes a long time, so we have to
+   */
+  //  override implicit protected val timeout = Timeout(20 seconds) // TODO configure
 
-  private def status(parsedEntity: Option[Json]): Option[String] = {
-    for {
-      e <- parsedEntity
-      s <- statusLens.get(e)
-    } yield s
-  }
-
-  private val locationLens = jObjectPL >=>
-    jsonObjectPL("results") >=>
-    jArrayPL >=>
-    jsonArrayPL(0) >=>
-    jObjectPL >=>
-    jsonObjectPL("geometry") >=>
-    jObjectPL >=>
-    jsonObjectPL("location") >=>
-    jObjectPL
-
-  private val latLens = locationLens >=>
-    jsonObjectPL("lat") >=>
-    jNumberPL
-
-  private val lngLens = locationLens >=>
-    jsonObjectPL("lng") >=>
-    jNumberPL
-
-  private def location(parsedEntity: Option[Json]): Option[Location] = {
-    for {
-      e <- parsedEntity
-      lat <- latLens.get(e)
-      lng <- lngLens.get(e)
-    } yield Location(lat, lng)
+  /**
+   * Implement inputToRequest of Client
+   */
+  protected def inputToRequest(address: Address): HttpRequest = {
+    val geoCodingUri = """https://maps.googleapis.com/maps/api/geocode/json?address=""" // TODO configure
+    def addressToUri(a: Address) =
+      geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
+    Get(addressToUri(address))
   }
 
   /**
-   * construct the result from the response
+   * Implement responseToResult of Client
    */
   protected def responseToResult(httpResponse: HttpResponse, address: Option[Try[Address]]): GeocodingResult = {
+
+    /**
+     * Extract status with lens
+     */
+    def status(parsedEntity: Option[Json]): Option[String] = {
+      val statusLens = jObjectPL >=>
+        jsonObjectPL("status") >=>
+        jStringPL
+      for {
+        e <- parsedEntity
+        s <- statusLens.get(e)
+      } yield s
+    }
+
+    /**
+     * Extract location with lenses
+     */
+    def location(parsedEntity: Option[Json]): Option[Location] = {
+      val locationLens = jObjectPL >=>
+        jsonObjectPL("results") >=>
+        jArrayPL >=>
+        jsonArrayPL(0) >=>
+        jObjectPL >=>
+        jsonObjectPL("geometry") >=>
+        jObjectPL >=>
+        jsonObjectPL("location") >=>
+        jObjectPL
+
+      val latLens = locationLens >=>
+        jsonObjectPL("lat") >=>
+        jNumberPL
+
+      val lngLens = locationLens >=>
+        jsonObjectPL("lng") >=>
+        jNumberPL
+      for {
+        e <- parsedEntity
+        lat <- latLens.get(e)
+        lng <- lngLens.get(e)
+      } yield Location(lat, lng)
+    }
+
     val parsedEntity = httpResponse.entity.asString.parseOption
 
     // extract by lenses from parsedEntity
@@ -132,20 +159,13 @@ case class GeocodingLocate(implicit system: ActorSystem)
     // see GeocodingStatusCodes
     _status match {
       case None =>
-        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response did not return status")
+        throw FunctionException1(address, httpStatusCodes.BadGateway, "Google Geocoding response did not return status")
       case Some("OK") if _location == None =>
-        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status OK but no location")
+        throw FunctionException1(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status OK but no location")
       case Some("ZERO_RESULTS") if _location != None =>
-        throw FunctionException(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but nevertheless location(s)")
+        throw FunctionException1(address, httpStatusCodes.BadGateway, "Google Geocoding response returned status ZERO_RESULTS but nevertheless location(s)")
       case _ =>
         GeocodingResult(GeocodingStatusCodes.withName(_status.get), _location) // everything OK!
     }
-  }
-
-  private val geoCodingUri = """https://maps.googleapis.com/maps/api/geocode/json?address="""
-  protected def inputToRequest(address: Address): HttpRequest = {
-    def addressToUri(a: Address) =
-      geoCodingUri + URLEncoder.encode(a.address, "UTF-8")
-    Get(addressToUri(address))
   }
 }

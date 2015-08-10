@@ -6,9 +6,12 @@ import scala.util.Try
 
 import com.typesafe.config.Config
 
-import akka.actor.ActorSystem
+import akka.actor.Actor
+import akka.actor.ActorRefFactory
+import akka.event.LoggingAdapter
 import spray.http.StatusCode
 
+case class FunctionContext(implicit actorRefFactory: ActorRefFactory, executionContext: ExecutionContext, configuration: Config, log: LoggingAdapter)
 /**
  * FutureFunction my wrap various mechanisms to implement and return a Future.
  * The asynchronous behavior may hidden. For instance we might use form implementation:
@@ -28,29 +31,14 @@ import spray.http.StatusCode
  *
  * The _apply method has to be implemented by the developer
  */
-abstract class FutureFunction(implicit system: ActorSystem) extends Configuration {
+abstract class FutureFunction(implicit functionContext: FunctionContext)
+    extends Configuration {
   self =>
-
-  implicit val configuration: Config = system.settings.config
-  implicit val executionContext: ExecutionContext = system.dispatcher
-  implicit val log = system.log
 
   val name = self.getClass.getName
   val configEntry = name
+  lazy val configuration = ??? // functionContext.configuration
 }
-
-/**
- * Message must NOT be used for constructing an external error http response
- * Exception is included and may reveal information for attacks
- * Message is used for internal error logging
- */
-case class InternalExceptionMessage(functionName: String, parameters: Seq[Option[Try[_]]], status: StatusCode, description: String, exception: Option[Exception])
-
-/**
- * Message is used for constructing an external error http response
- * Exception is excluded because of security concerns
- */
-case class ExternalExceptionMessage(functionName: String, parameters: Seq[Option[Try[_]]], status: StatusCode, description: String)
 
 /**
  * Unified interface for exceptions occurring during function evaluation
@@ -60,15 +48,33 @@ abstract class FunctionException extends RuntimeException {
   val parameters: Seq[Option[Try[_]]]
   val status: StatusCode
   val description: String
-  val exception: Option[Exception] = None
-  val internalMessage = InternalExceptionMessage(functionName, parameters, status, description, exception).toString
-  val externalMessage = ExternalExceptionMessage(functionName, parameters, status, description).toString
-  override def getMessage() = externalMessage
+  val exception: Option[Throwable]
+  val internalMessage = InternalExceptionMessage(functionName, parameters, status, description, exception)
+  val externalMessage = ExternalExceptionMessage(functionName, parameters, status, description)
+  override def getMessage() = externalMessage.toString()
+
+  /**
+   * Message must NOT be used for constructing an external error http response
+   * Exception is included and may reveal information for attacks
+   * Message is used for internal error logging
+   */
+  case class InternalExceptionMessage(functionName: String, parameters: Seq[Option[Try[_]]], status: StatusCode, description: String, exception: Option[Throwable])
+
+  /**
+   * Message is used for constructing an external error http response
+   * Exception is excluded because of security concerns
+   */
+  case class ExternalExceptionMessage(functionName: String, parameters: Seq[Option[Try[_]]], status: StatusCode, description: String)
 }
 
-abstract class FutureFunction0[+R](implicit system: ActorSystem)
+/**
+ * Abstract FutureFunction with no parameter
+ */
+abstract class FutureFunction0[+R](implicit functionContext: FunctionContext)
     extends FutureFunction {
   self =>
+
+  import functionContext._
 
   /**
    * Abstract method to be implemented
@@ -93,14 +99,19 @@ abstract class FutureFunction0[+R](implicit system: ActorSystem)
     returnValue
   }
 
-  case class FunctionException(status: StatusCode, description: String, exception: Option[Exception] = None) extends RuntimeException {
+  case class FunctionException0(status: StatusCode, description: String, exception: Option[Throwable] = None) extends FunctionException {
     val functionName = self.name
+    val parameters: Seq[Option[Try[_]]] = Seq()
   }
 }
 
-abstract class FutureFunction1[T, +R](implicit system: ActorSystem)
+/**
+ * Abstract FutureFunction with one parameter
+ */
+abstract class FutureFunction1[T, +R](implicit functionContext: FunctionContext)
     extends FutureFunction {
   self =>
+  import functionContext._
 
   /**
    * Abstract method to be implemented
@@ -125,7 +136,8 @@ abstract class FutureFunction1[T, +R](implicit system: ActorSystem)
     afterCall(parameter, returnValue)
     returnValue
   }
-  case class FunctionException[T](parameter: Option[Try[T]], status: StatusCode, description: String, exception: Option[Throwable] = None) extends RuntimeException {
+  case class FunctionException1[T](parameter: Option[Try[T]], status: StatusCode, description: String, exception: Option[Throwable] = None) extends FunctionException {
     val functionName = self.name
+    val parameters: Seq[Option[Try[_]]] = Seq(parameter)
   }
 }

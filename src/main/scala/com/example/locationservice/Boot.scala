@@ -7,5 +7,5 @@ package com.example.locationservice
 import com.glueware.glue._
 
 object Boot extends App {
-  Server("locationsystem", ServiceApi)
+  Server("locationsystem", LocationApi)
 }
