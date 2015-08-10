@@ -14,6 +14,11 @@ import akka.actor.Props
 import akka.actor.ActorSystem
 import scala.concurrent.ExecutionContext
 
+/**
+ * Companion object producing
+ * ServiceActors quite on the sense of spray
+ */
+
 object ServiceActor {
   def apply(apiFactory: ApiFactory)() =
     new ServiceActor {
@@ -25,6 +30,10 @@ object ServiceActor {
       val route: Route = apiFactory.apply.route()
     }
 }
+
+/**
+ * ServiceActor quite on the sense of spray
+ */
 abstract class ServiceActor
     extends Actor
     with HttpService {

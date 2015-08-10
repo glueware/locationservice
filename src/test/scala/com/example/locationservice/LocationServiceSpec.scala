@@ -5,7 +5,7 @@ import spray.http.ContentTypes._
 import spray.http.HttpEntity
 import spray.http.HttpMethods.POST
 import spray.http.HttpRequest
-import spray.http.StatusCodes.OK
+import spray.http.StatusCodes._
 import spray.http.Uri.apply
 import spray.routing.HttpService
 import spray.routing.directives.{ LoggingMagnet, LogEntry, DebuggingDirectives }
@@ -36,23 +36,7 @@ class LocationServiceSpec
 
   implicit def default(implicit system: ActorSystem) = RouteTestTimeout(FiniteDuration(100, SECONDS))
 
-  /*
-     * Directives debugging
-     */
-  val logRequestResponsePrintln = {
-    implicit val la: LoggingAdapter = null
-    DebuggingDirectives.logRequest("location-service")
-
-    def requestMethodAndResponseStatusAsInfo(req: HttpRequest): Any => Option[LogEntry] = {
-      case _ => Some(LogEntry(req.toString))
-    }
-
-    // This one doesn't use the implicit LoggingAdapter but uses `println` for logging
-    def printRequestMethodAndResponseStatus(req: HttpRequest)(res: Any): Unit =
-      println(requestMethodAndResponseStatusAsInfo(req)(res).map(_.obj.toString).getOrElse(""))
-    DebuggingDirectives.logRequestResponse(LoggingMagnet(printRequestMethodAndResponseStatus))
-  }
-
+  // producing the same route as in 
   implicit val functionContext = FunctionContext()(
     actorRefFactory = system,
     executionContext = system.dispatcher,
@@ -61,13 +45,16 @@ class LocationServiceSpec
 
   val route = LocationApi.apply().route()
 
-  val json = """{"address": "Eendrachtlaan 315, Utrecht"}"""
-
   val locateUri = """/com/example/locationservice/Locate"""
   "location service" should {
-    "return status OK POST " in {
+    object Utrecht {
+      val json = """{"address": "Eendrachtlaan 315, Utrecht"}"""
+      val latitude = 52.0618174
+      val longitude = 5.1085974
+    }
+    "return status OK and the correct result" in {
       HttpRequest(method = POST, uri = locateUri,
-        entity = HttpEntity(`application/json`, json)) ~> logRequestResponsePrintln(route) ~> check {
+        entity = HttpEntity(`application/json`, Utrecht.json)) ~> route ~> check {
           response.status should be equalTo OK
           response.entity should not be equalTo(None)
           val serviceLocation = responseAs[ServiceLocation]
@@ -75,5 +62,19 @@ class LocationServiceSpec
           serviceLocation.longitude must beCloseTo(5.1085974, 0.5)
         }
     }
+    object NonExistentAddress {
+      val json = """{"address": "Xyz 123, Abc"}"""
+    }
+    "return status BadRequest for a non-existent address" in {
+      HttpRequest(method = POST, uri = locateUri,
+        entity = HttpEntity(`application/json`, NonExistentAddress.json)) ~> route ~> check {
+          response.status should be equalTo BadRequest
+        }
+    }
   }
+
+  // The extracted abstract Interfaces. e.g. ILocationApi, ILocate, IGeocodingLocate, ...
+  // enable us to construct various test cases for FutureFunctions if the function(s) depending on is(are) malfunctioning     
+  // ...
+  // TODO
 }

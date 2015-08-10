@@ -63,7 +63,13 @@ abstract class Client[T, R](implicit functionContext: FunctionContext)
 
     val response = for {
       p <- parameter
-      r <- pipeline(inputToRequest(p))
+      r <- {
+        val requestTry = Try(inputToRequest(p))
+        requestTry match {
+          case Success(request) => pipeline(inputToRequest(p))
+          case Failure(e)       => Promise[HttpResponse]().failure(e).future
+        }
+      }
     } yield r
 
     val result = Promise[R]()
@@ -73,7 +79,7 @@ abstract class Client[T, R](implicit functionContext: FunctionContext)
     response.onComplete {
       case Success(httpResponse) =>
         httpResponse.status match {
-          case httpStatusCodes.OK => result.success(responseToResult(httpResponse, parameter.value))
+          case httpStatusCodes.OK => result.complete(Try(responseToResult(httpResponse, parameter.value)))
           case s                  => result.failure(FunctionException1(parameter.value, httpStatusCodes.BadGateway, s"Google Geocoding responded with Http status code: ${s}"))
         }
       case Failure(exception: AskTimeoutException) =>

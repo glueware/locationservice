@@ -1,12 +1,9 @@
 package com.example.locationservice
 
 import java.net.URLEncoder
-
 import scala.util.Try
 import scala.concurrent.duration._
-
 import com.glueware.glue._
-
 import akka.util.Timeout
 import akka.actor.ActorRefFactory
 import argonaut.Argonaut.StringToParseWrap
@@ -25,6 +22,7 @@ import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import spray.json.JsValue
 import spray.json.JsonFormat
+import scala.concurrent.Future
 
 /**
  * The GeocodingStatusCodes express a contract with Google Geocoding.

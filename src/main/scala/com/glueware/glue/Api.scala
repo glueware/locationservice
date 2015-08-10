@@ -45,5 +45,3 @@ abstract class ApiFactory {
   def apply()(implicit functionContext: FunctionContext): Api
 }
 
-// Extracted abstract Interfaces. e.g. ILocation
-// Enables to construct various test cases.

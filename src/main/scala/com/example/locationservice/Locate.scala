@@ -45,11 +45,12 @@ abstract class ILocate(geocodingLocate: FutureFunction1[Address, GeocodingResult
 case class Locate(geocodingLocate: FutureFunction1[Address, GeocodingResult])(implicit functionContext: FunctionContext)
     extends ILocate(geocodingLocate) {
   import functionContext._
-  
+
   // Members declared in scala.Function1 
   def _apply(address: Future[Address]): Future[ServiceLocation] = {
-    def geocodingResultToLocation(geocodingResult: GeocodingResult): ServiceLocation = {
+    def geocodingResultToLocation(geocodingResult: GeocodingResult): Future[ServiceLocation] = {
 
+      log.debug(geocodingResult.toString)
       import GeocodingStatusCodes._
 
       val status = geocodingResult.status
@@ -58,12 +59,12 @@ case class Locate(geocodingLocate: FutureFunction1[Address, GeocodingResult])(im
       status match {
         case OK =>
           if (location.isDefined)
-            ServiceLocation(location.get.lat, location.get.lng)
+            Future.successful(ServiceLocation(location.get.lat, location.get.lng))
           else
-            throw FunctionException1(address.value, InternalServerError, "Google Geocoding contract not correctly checked")
-        case _ => throw FunctionException1(address.value, BadRequest, s"Google Geocoding no location found. Geocoding Status Code: ${status}")
+            Future.failed(FunctionException1(address.value, InternalServerError, "Google Geocoding contract not correctly checked"))
+        case _ => Future.failed(FunctionException1(address.value, BadRequest, s"Google Geocoding no location found. Geocoding Status Code: ${status}"))
       }
     }
-    geocodingLocate(address).map(geocodingResultToLocation)
+    geocodingLocate(address).flatMap(geocodingResultToLocation)
   }
 }
