@@ -140,6 +140,7 @@ case class GeocodingLocate(implicit functionContext: FunctionContext)
       val lngLens = locationLens >=>
         jsonObjectPL("lng") >=>
         jNumberPL
+
       for {
         e <- parsedEntity
         lat <- latLens.get(e)
