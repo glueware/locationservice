@@ -14,35 +14,28 @@ import akka.actor.Props
 import akka.actor.ActorSystem
 import scala.concurrent.ExecutionContext
 
-/**
- * Companion object producing
- * ServiceActors quite on the sense of spray
- */
-
 object ServiceActor {
-  def apply(apiFactory: ApiFactory)() =
-    new ServiceActor {
-      implicit val functionContext = FunctionContext()(
-        actorRefFactory = context,
-        executionContext = system.dispatcher,
-        configuration = system.settings.config,
-        log = system.log)
-      val route: Route = apiFactory.apply.route()
-    }
+  def props(apiFactory: ApiFactory): Props = Props(new ServiceActor(apiFactory))
 }
 
 /**
  * ServiceActor quite on the sense of spray
  */
-abstract class ServiceActor
+class ServiceActor(apiFactory: ApiFactory)
     extends Actor
     with HttpService {
 
   val system = context.system
 
-  implicit val actorRefFactory = context
-  val route: Route
+  implicit val functionContext = FunctionContext()(
+    actorRefFactory = context,
+    executionContext = system.dispatcher,
+    configuration = system.settings.config,
+    log = system.log)
 
+  implicit val actorRefFactory = context
+  val route: Route = apiFactory.apply.route()
+  
   val receive: Receive =
     runRoute(route)
 }

@@ -21,8 +21,8 @@ case class Server(systemName: String, serviceFactory: ApiFactory) {
   // get the execution environment
   //  implicit val executionContext = system.dispatcher
 
-  private val serviceActor = ServiceActor(serviceFactory)
-  private val listener = system.actorOf(Props(serviceActor))
+  //  private val serviceActor = ServiceActor(serviceFactory)
+  private val listener = system.actorOf(ServiceActor.props(serviceFactory))
 
   // Get Server settings for Http.Bind
   private val configuration = new Configuration {
