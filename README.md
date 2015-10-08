@@ -1,9 +1,9 @@
-# Typesafe and Self-contained Components 
+# Typesafe, Self-contained Configurable Components 
 (work in progress)
 ## locationservice 
 Build a small REST web service (Location Service) that takes JSON containing an address and returns JSON with the corresponding latitude longitude coordinates.
 
-## Making spray typesafe
+## Typesafe
 The basic architecture of the spray server can be understood as a partial function (receive), which asynchronously evaluates, by an actor request response mechanism:
 
 HttpRequest => HttpResponse
